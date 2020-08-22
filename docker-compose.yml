@@ -1,0 +1,50 @@
+version: '3.6'
+
+services:
+  redis:
+    image: redis
+
+  # database service
+  db:
+    image: mongo:3.6
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./data/mongodb:/data/db
+    command: --smallfiles
+
+  worker_1:
+    build:
+      context: .
+    hostname: worker_1
+    environment:
+      FLASK_APP: app.py
+      SETTINGS_FILE: settings.local_settings
+      APPLICATION_NAME: flask-scaffolding
+      LOG_ROOT: /var/log
+    entrypoint: celery
+    command: -A app.celery worker --loglevel=info -Q workerA
+    volumes:
+      - ./src/:/code
+    depends_on:
+      - redis
+
+  # web service for flask application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: flask-scaffolding:assessment
+    env_file:
+      local.env
+    command: >
+      /bin/ash -c "
+        flask run --host=0.0.0.0
+      "
+    volumes:
+      - ./src/:/code
+      - ./logs:/var/log/scaffolding
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
